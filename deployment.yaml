@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: declutter-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: declutter-dashboard
+  template:
+    metadata:
+      labels:
+        app: declutter-dashboard
+    spec:
+      containers:
+        - name: declutter-dashboard
+          image: declutter-dashboard
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 5000
+          volumeMounts:
+            - name: scan-volume
+              mountPath: /data
+      volumes:
+        - name: scan-volume
+          hostPath:
+            path: /mnt/scan_target
+            type: Directory

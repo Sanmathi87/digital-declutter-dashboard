@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Digital Declutter Dashboard</title>
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: #1e293b;
+            font-size: 32px;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            color: #64748b;
+            font-size: 15px;
+        }
+
+        .scan-controls {
+            text-align: center;
+            margin: 25px 0;
+        }
+
+        #folderInput {
+            width: 420px;
+            max-width: 90%;
+            padding: 12px 14px;
+            font-size: 14px;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            margin-bottom: 12px;
+        }
+
+        .scan-btn {
+            display: block;
+            margin: 0 auto;
+            padding: 14px 40px;
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .scan-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(79, 70, 229, 0.4);
+        }
+
+        .scanned-path {
+            text-align: center;
+            color: #64748b;
+            font-size: 13px;
+            margin-top: 10px;
+        }
+
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 18px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            text-align: center;
+        }
+
+        .card .value {
+            font-size: 26px;
+            font-weight: 700;
+            color: #4f46e5;
+        }
+
+        .card .label {
+            font-size: 13px;
+            color: #64748b;
+            margin-top: 4px;
+        }
+
+        .savings-box {
+            background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+            border: 1px solid #6ee7b7;
+            padding: 18px 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-size: 16px;
+            color: #065f46;
+        }
+
+        .savings-box strong {
+            font-size: 18px;
+        }
+
+        .section {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .section h2 {
+            margin-top: 0;
+            font-size: 18px;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sort-btn {
+            padding: 6px 14px;
+            font-size: 13px;
+            background: #eef2ff;
+            color: #4f46e5;
+            border: 1px solid #c7d2fe;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 12px;
+        }
+
+        .sort-btn:hover {
+            background: #e0e7ff;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 5px;
+        }
+
+        th, td {
+            padding: 10px 12px;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        th {
+            background: #f8fafc;
+            color: #475569;
+            font-weight: 600;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        td {
+            border-bottom: 1px solid #f1f5f9;
+            color: #334155;
+            word-break: break-all;
+        }
+
+        tr:hover td {
+            background: #f8fafc;
+        }
+
+        .empty-msg {
+            color: #94a3b8;
+            font-style: italic;
+            font-size: 14px;
+            padding: 10px 0;
+        }
+
+        .loading {
+            text-align: center;
+            color: #64748b;
+            padding: 20px;
+        }
+
+        .error-msg {
+            text-align: center;
+            color: #dc2626;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧹 Digital Declutter Dashboard</h1>
+            <p class="subtitle">Find duplicate, large, and forgotten files cluttering your storage</p>
+        </div>
+
+        <div class="scan-controls">
+            <input type="text" id="folderInput" placeholder="Enter folder path (e.g. C:\Users\you\Downloads) — leave blank to use sample folder">
+            <button class="scan-btn" onclick="runScan()">🔍 Scan Folder</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        async function runScan() {
+            const folderPath = document.getElementById("folderInput").value.trim();
+            const url = folderPath ? `/scan?folder=${encodeURIComponent(folderPath)}` : "/scan";
+
+            document.getElementById("results").innerHTML = '<p class="loading">Scanning your folder...</p>';
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.error) {
+                document.getElementById("results").innerHTML = `<p class="error-msg">${data.error}</p>`;
+                return;
+            }
+
+            const savingsMB = (data.total_suggested_savings_bytes / (1024*1024)).toFixed(2);
+
+            let html = `<p class="scanned-path">📂 Scanned: ${data.scanned_folder}</p>`;
+
+            html += `
+            <div class="summary-cards">
+                <div class="card"><div class="value">${data.total_files_scanned}</div><div class="label">Files Scanned</div></div>
+                <div class="card"><div class="value">${data.duplicates.length}</div><div class="label">Duplicate Groups</div></div>
+                <div class="card"><div class="value">${data.large_files.length}</div><div class="label">Large Files</div></div>
+                <div class="card"><div class="value">${data.old_files.length}</div><div class="label">Old Files</div></div>
+                <div class="card"><div class="value">${data.empty_folders.length}</div><div class="label">Empty Folders</div></div>
+            </div>
+
+            <div class="savings-box">
+                💡 <strong>${savingsMB} MB</strong> could potentially be freed up by cleaning the items below.
+            </div>`;
+
+            html += `<div class="section">
+                <h2>📄 Duplicate Files</h2>
+                <div id="duplicates-table"></div>
+            </div>`;
+
+            html += `<div class="section">
+                <h2>📦 Large Files (&gt;5MB)</h2>
+                <button class="sort-btn" onclick="sortAndRender('large_files', 'size')">Sort by Size</button>
+                <div id="large-files-table"></div>
+            </div>`;
+
+            html += `<div class="section">
+                <h2>🕒 Old / Unused Files (6+ months)</h2>
+                <button class="sort-btn" onclick="sortAndRender('old_files', 'modified_time')">Sort by Date</button>
+                <div id="old-files-table"></div>
+            </div>`;
+
+            html += `<div class="section">
+                <h2>📁 Empty Folders</h2>
+                <div id="empty-folders-list"></div>
+            </div>`;
+
+            document.getElementById("results").innerHTML = html;
+
+            window.scanData = data;
+            renderDuplicatesTable(data.duplicates);
+            renderLargeFilesTable(data.large_files);
+            renderOldFilesTable(data.old_files);
+            renderEmptyFolders(data.empty_folders);
+        }
+
+        function renderDuplicatesTable(groups) {
+            const el = document.getElementById("duplicates-table");
+            if (groups.length === 0) {
+                el.innerHTML = '<p class="empty-msg">No duplicate files found. 🎉</p>';
+                return;
+            }
+            let html = "<table><tr><th>File</th><th>Size (KB)</th></tr>";
+            groups.forEach(group => {
+                group.forEach(f => {
+                    html += `<tr><td>${f.path}</td><td>${(f.size/1024).toFixed(1)}</td></tr>`;
+                });
+            });
+            html += "</table>";
+            el.innerHTML = html;
+        }
+
+        function renderLargeFilesTable(files) {
+            const el = document.getElementById("large-files-table");
+            if (files.length === 0) {
+                el.innerHTML = '<p class="empty-msg">No large files found.</p>';
+                return;
+            }
+            let html = "<table><tr><th>File</th><th>Size (MB)</th></tr>";
+            files.forEach(f => {
+                html += `<tr><td>${f.path}</td><td>${(f.size/(1024*1024)).toFixed(2)}</td></tr>`;
+            });
+            html += "</table>";
+            el.innerHTML = html;
+        }
+
+        function renderOldFilesTable(files) {
+            const el = document.getElementById("old-files-table");
+            if (files.length === 0) {
+                el.innerHTML = '<p class="empty-msg">No old/unused files found.</p>';
+                return;
+            }
+            let html = "<table><tr><th>File</th><th>Last Modified</th></tr>";
+            files.forEach(f => {
+                const date = new Date(f.modified_time * 1000).toLocaleDateString();
+                html += `<tr><td>${f.path}</td><td>${date}</td></tr>`;
+            });
+            html += "</table>";
+            el.innerHTML = html;
+        }
+
+        function renderEmptyFolders(folders) {
+            const el = document.getElementById("empty-folders-list");
+            if (folders.length === 0) {
+                el.innerHTML = '<p class="empty-msg">No empty folders found.</p>';
+                return;
+            }
+            let html = "<table><tr><th>Folder Path</th></tr>";
+            folders.forEach(f => {
+                html += `<tr><td>${f}</td></tr>`;
+            });
+            html += "</table>";
+            el.innerHTML = html;
+        }
+
+        function sortAndRender(key, sortField) {
+            const files = [...window.scanData[key]];
+            files.sort((a, b) => b[sortField] - a[sortField]);
+
+            if (key === "large_files") {
+                renderLargeFilesTable(files);
+            } else if (key === "old_files") {
+                renderOldFilesTable(files);
+            }
+        }
+    </script>
+</body>
+</html>
