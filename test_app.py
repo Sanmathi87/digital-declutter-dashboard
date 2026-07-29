@@ -35,7 +35,7 @@ def test_find_large_files_detects_big_file():
     ]
     large_files = find_large_files(files, threshold_mb=5)
     assert len(large_files) == 1
-    assert large_files[0]["path"] == "wrong_name.zip"
+    assert large_files[0]["path"] == "big.zip"
 
 
 def test_find_large_files_none_when_all_small():
