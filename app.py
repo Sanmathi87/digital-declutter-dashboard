@@ -1,6 +1,7 @@
 import os
 import time
 import hashlib
+import shutil
 from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
@@ -26,6 +27,10 @@ def scan_directory(path):
     empty_folders = []
 
     for root, dirs, files in os.walk(path):
+        # Skip the review folder itself so it doesn't get scanned/re-flagged
+        if "_declutter_review" in root:
+            continue
+
         if not dirs and not files:
             empty_folders.append(root)
 
@@ -75,6 +80,34 @@ def find_old_files(all_files, months_threshold=6):
     return [f for f in all_files if f["modified_time"] < cutoff_time]
 
 
+def move_files_to_review(file_paths, scanned_folder):
+    """Moves a list of files into a '_declutter_review' subfolder, without deleting anything."""
+    review_folder = os.path.join(scanned_folder, "_declutter_review")
+    os.makedirs(review_folder, exist_ok=True)
+
+    moved = []
+    errors = []
+
+    for path in file_paths:
+        try:
+            filename = os.path.basename(path)
+            destination = os.path.join(review_folder, filename)
+
+            # Avoid overwriting if a file with the same name already exists in review folder
+            counter = 1
+            base, ext = os.path.splitext(filename)
+            while os.path.exists(destination):
+                destination = os.path.join(review_folder, f"{base}_{counter}{ext}")
+                counter += 1
+
+            shutil.move(path, destination)
+            moved.append({"from": path, "to": destination})
+        except Exception as e:
+            errors.append({"path": path, "error": str(e)})
+
+    return moved, errors
+
+
 @app.route("/")
 def home():
     return render_template("index.html")
@@ -113,10 +146,32 @@ def scan():
         "duplicates": duplicates,
         "large_files": large_files,
         "old_files": old_files,
+        "all_files": all_files,
         "duplicate_waste_bytes": total_duplicate_waste,
         "total_suggested_savings_bytes": total_suggested_savings
     }
     return jsonify(result)
+
+
+@app.route("/cleanup", methods=["POST"])
+def cleanup():
+    data = request.get_json()
+    file_paths = data.get("files", [])
+    scanned_folder = data.get("folder", "")
+
+    if not file_paths:
+        return jsonify({"error": "No files provided"}), 400
+
+    if not os.path.exists(scanned_folder):
+        return jsonify({"error": f"Scanned folder not found: {scanned_folder}"}), 404
+
+    moved, errors = move_files_to_review(file_paths, scanned_folder)
+
+    return jsonify({
+        "moved_count": len(moved),
+        "moved": moved,
+        "errors": errors
+    })
 
 
 if __name__ == "__main__":

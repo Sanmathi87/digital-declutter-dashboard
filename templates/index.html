@@ -144,6 +144,7 @@
             border-radius: 6px;
             cursor: pointer;
             margin-bottom: 12px;
+            margin-right: 8px;
         }
 
         .sort-btn:hover {
@@ -211,7 +212,7 @@
         </div>
 
         <div class="scan-controls">
-            <input type="text" id="folderInput" placeholder="Enter folder path (e.g. C:\Users\you\Downloads) — leave blank to use sample folder">
+            <input type="text" id="folderInput" placeholder="Enter folder path (e.g. /data/declutter_demo) — leave blank to use sample folder">
             <button class="scan-btn" onclick="runScan()">🔍 Scan Folder</button>
         </div>
 
@@ -251,24 +252,36 @@
 
             html += `<div class="section">
                 <h2>📄 Duplicate Files</h2>
+                <button class="sort-btn" onclick="moveToReview('duplicates')">🗂️ Move Extra Copies to Review Folder</button>
                 <div id="duplicates-table"></div>
+                <div id="duplicates-status"></div>
             </div>`;
 
             html += `<div class="section">
                 <h2>📦 Large Files (&gt;5MB)</h2>
                 <button class="sort-btn" onclick="sortAndRender('large_files', 'size')">Sort by Size</button>
+                <button class="sort-btn" onclick="moveToReview('large_files')">🗂️ Move to Review Folder</button>
                 <div id="large-files-table"></div>
+                <div id="large-files-status"></div>
             </div>`;
 
             html += `<div class="section">
                 <h2>🕒 Old / Unused Files (6+ months)</h2>
                 <button class="sort-btn" onclick="sortAndRender('old_files', 'modified_time')">Sort by Date</button>
+                <button class="sort-btn" onclick="moveToReview('old_files')">🗂️ Move to Review Folder</button>
                 <div id="old-files-table"></div>
+                <div id="old-files-status"></div>
             </div>`;
 
             html += `<div class="section">
                 <h2>📁 Empty Folders</h2>
                 <div id="empty-folders-list"></div>
+            </div>`;
+
+            html += `<div class="section">
+                <h2>📋 All Scanned Files</h2>
+                <button class="sort-btn" onclick="sortAndRender('all_files', 'size')">Sort by Size</button>
+                <div id="all-files-table"></div>
             </div>`;
 
             document.getElementById("results").innerHTML = html;
@@ -278,6 +291,7 @@
             renderLargeFilesTable(data.large_files);
             renderOldFilesTable(data.old_files);
             renderEmptyFolders(data.empty_folders);
+            renderAllFilesTable(data.all_files);
         }
 
         function renderDuplicatesTable(groups) {
@@ -339,6 +353,21 @@
             el.innerHTML = html;
         }
 
+        function renderAllFilesTable(files) {
+            const el = document.getElementById("all-files-table");
+            if (files.length === 0) {
+                el.innerHTML = '<p class="empty-msg">No files found.</p>';
+                return;
+            }
+            let html = "<table><tr><th>File</th><th>Size (KB)</th><th>Last Modified</th></tr>";
+            files.forEach(f => {
+                const date = new Date(f.modified_time * 1000).toLocaleDateString();
+                html += `<tr><td>${f.path}</td><td>${(f.size/1024).toFixed(1)}</td><td>${date}</td></tr>`;
+            });
+            html += "</table>";
+            el.innerHTML = html;
+        }
+
         function sortAndRender(key, sortField) {
             const files = [...window.scanData[key]];
             files.sort((a, b) => b[sortField] - a[sortField]);
@@ -347,6 +376,56 @@
                 renderLargeFilesTable(files);
             } else if (key === "old_files") {
                 renderOldFilesTable(files);
+            } else if (key === "all_files") {
+                renderAllFilesTable(files);
+            }
+        }
+
+        async function moveToReview(category) {
+            let filesToMove = [];
+
+            if (category === "duplicates") {
+                // For duplicates, move every file EXCEPT the first copy in each group
+                window.scanData.duplicates.forEach(group => {
+                    group.slice(1).forEach(f => filesToMove.push(f.path));
+                });
+            } else if (category === "large_files") {
+                filesToMove = window.scanData.large_files.map(f => f.path);
+            } else if (category === "old_files") {
+                filesToMove = window.scanData.old_files.map(f => f.path);
+            }
+
+            if (filesToMove.length === 0) {
+                alert("No files to move in this category.");
+                return;
+            }
+
+            const confirmed = confirm(`Move ${filesToMove.length} file(s) to a "_declutter_review" folder? This does NOT delete them — you can review and delete manually afterward.`);
+            if (!confirmed) return;
+
+            const statusId = category === "duplicates" ? "duplicates-status" :
+                              category === "large_files" ? "large-files-status" : "old-files-status";
+
+            document.getElementById(statusId).innerHTML = '<p class="loading">Moving files...</p>';
+
+            try {
+                const response = await fetch("/cleanup", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        files: filesToMove,
+                        folder: window.scanData.scanned_folder
+                    })
+                });
+                const result = await response.json();
+
+                let message = `<p style="color:#065f46;">✅ Moved ${result.moved_count} file(s) to _declutter_review folder.</p>`;
+                if (result.errors && result.errors.length > 0) {
+                    message += `<p style="color:#dc2626;">⚠️ ${result.errors.length} file(s) could not be moved.</p>`;
+                }
+                document.getElementById(statusId).innerHTML = message;
+            } catch (err) {
+                document.getElementById(statusId).innerHTML = `<p class="error-msg">Failed to move files. Try scanning again.</p>`;
             }
         }
     </script>
